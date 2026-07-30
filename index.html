@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>rabbithole-inator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Comic+Relief:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+
+  .rm-root {
+    --felt: #1f2e28;
+    --felt-dark: #14201c;
+    --parchment: #e9dcbe;
+    --parchment-edge: #d3c393;
+    --ink: #2b241d;
+    --ink-soft: #4a4136;
+    --walnut: #5a3b23;
+    --brass: #c6a15b;
+    --brass-light: #e4c98a;
+    --stamp: #9c3b2c;
+    --claret: #6b2737;
+
+    font-family: 'Comic Relief', sans-serif;
+    background: radial-gradient(ellipse at 50% -10%, #2a3d34 0%, var(--felt) 55%, var(--felt-dark) 100%);
+    color: var(--ink);
+    height: 100vh;
+    width: 100%;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .rm-header {
+    text-align: center;
+    padding: 16px 16px 10px;
+    position: relative;
+    z-index: 5;
+    flex-shrink: 0;
+  }
+  .rm-header h1 {
+    font-family: 'Comic Relief', sans-serif;
+    font-style: italic;
+    font-weight: 600;
+    color: #f2ead2;
+    font-size: clamp(22px, 4vw, 32px);
+    margin: 2px 0 4px;
+  }
+
+  .rm-viewport {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+  }
+  .rm-viewport.dragging { cursor: grabbing; }
+
+  .rm-canvas {
+    position: absolute;
+    left: 0; top: 0;
+    width: 0; height: 0;
+    transform-origin: 0 0;
+    will-change: transform;
+  }
+  .rm-canvas.animated { transition: transform 0.55s cubic-bezier(.2,.7,.3,1); }
+
+  .rm-edges {
+    position: absolute;
+    left: -6000px; top: -6000px;
+    width: 12000px; height: 12000px;
+    overflow: visible;
+    pointer-events: none;
+  }
+
+  .rm-node {
+    position: absolute;
+    width: 176px;
+    transform: translate(-50%, -50%);
+    background: var(--parchment);
+    border: 1.5px dashed #9a8b6a;
+    border-radius: 4px;
+    padding: 9px 11px 10px;
+    cursor: pointer;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.35);
+    font-family: 'Comic Relief', sans-serif;
+    user-select: none;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  }
+  .rm-node:hover { box-shadow: 0 8px 20px rgba(0,0,0,0.45); }
+  .rm-node.opened { border: 1.5px solid var(--brass); }
+  .rm-node.selected {
+    border: 1.5px solid var(--claret);
+    box-shadow: 0 0 0 3px rgba(107,39,55,0.25), 0 8px 20px rgba(0,0,0,0.45);
+  }
+  .rm-node.loading { opacity: 0.75; }
+  .rm-node.seed { border-style: solid; border-color: var(--brass-light); }
+
+  .rm-node .callnum {
+    font-family: 'Comic Relief', sans-serif;
+    font-size: 9px;
+    color: var(--claret);
+    margin-bottom: 2px;
+    min-height: 11px;
+  }
+  .rm-node .label {
+    font-family: 'Comic Relief', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    line-height: 1.2;
+    color: var(--ink);
+  }
+  .rm-node .spinner-line {
+    font-family: 'Comic Relief', sans-serif;
+    font-size: 9.5px;
+    color: var(--claret);
+    margin-top: 3px;
+  }
+
+  .rm-controls {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    z-index: 6;
+  }
+  .rm-ctrl-btn {
+    width: 34px; height: 34px;
+    border-radius: 4px;
+    background: var(--walnut);
+    color: var(--brass-light);
+    border: 1px solid var(--brass);
+    font-family: 'Comic Relief', sans-serif;
+    font-size: 15px;
+    cursor: pointer;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+  }
+  .rm-ctrl-btn:hover { background: #6d4a2c; }
+  .rm-ctrl-btn.wide { width: auto; padding: 0 10px; font-size: 11px; }
+
+  .rm-legend {
+    position: absolute;
+    left: 16px;
+    bottom: 16px;
+    font-family: 'Comic Relief', sans-serif;
+    font-size: 9.5px;
+    color: #90a094;
+    max-width: 220px;
+    line-height: 1.6;
+    z-index: 6;
+    pointer-events: none;
+  }
+  .rm-legend b { color: var(--brass-light); }
+
+  /* HUD for active race */
+  .rm-race-hud {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--parchment);
+    padding: 12px 20px;
+    border-radius: 4px;
+    border: 2px solid var(--brass);
+    z-index: 10;
+    font-family: 'Comic Relief', sans-serif;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    display: none;
+    align-items: center;
+    gap: 12px;
+    color: var(--ink);
+    font-size: 14px;
+  }
+  .rm-race-hud b { color: var(--claret); }
+  .rm-race-hud-btn {
+    background: var(--claret);
+    color: #f4e8d8;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: 'Comic Relief', sans-serif;
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  /* Modal overlay */
+  .rm-keygate {
+    position: absolute;
+    inset: 0;
+    background: rgba(20, 32, 28, 0.88);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    padding: 20px;
+  }
+  .rm-keygate.hidden { display: none; }
+  .rm-keygate-card {
+    background: var(--parchment);
+    border: 1px solid var(--parchment-edge);
+    border-radius: 4px;
+    padding: 24px 26px 26px;
+    max-width: 380px;
+    width: 100%;
+    max-height: 86vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+  }
+  .rm-keygate-title {
+    font-family: 'Comic Relief', sans-serif;
+    font-weight: 600;
+    font-size: 22px;
+    margin: 0 0 8px;
+    color: var(--ink);
+  }
+  .rm-keygate-note {
+    font-family: 'Comic Relief', sans-serif;
+    font-size: 13px;
+    color: var(--ink-soft);
+    line-height: 1.55;
+    margin: 0 0 16px;
+  }
+  .rm-key-input {
+    width: 100%;
+    font-family: 'Comic Relief', sans-serif;
+    font-size: 12.5px;
+    padding: 10px 11px;
+    border: 1.5px solid var(--ink-soft);
+    border-radius: 3px;
+    background: #f4ecd7;
+    color: var(--ink);
+    margin-bottom: 12px;
+  }
+  .rm-key-save {
+    width: 100%;
+    background: var(--claret);
+    color: #f4e8d8;
+    border: none;
+    font-family: 'Comic Relief', sans-serif;
+    font-size: 12.5px;
+    padding: 11px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    letter-spacing: 0.03em;
+  }
+  .rm-key-save:hover { background: #7d2f41; }
+  .rm-keygate-error {
+    font-family: 'Comic Relief', sans-serif;
+    font-size: 11px;
+    margin-top: 10px;
+    min-height: 14px;
+  }
+
+  /* Detail panel */
+  .rm-panel {
+    position: absolute;
+    top: 0; right: 0;
+    height: 100%;
+    width: 320px;
+    max-width: 86vw;
+    background: var(--felt-dark);
+    border-left: 3px solid var(--brass);
+    box-shadow: -12px 0 30px rgba(0,0,0,0.4);
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    z-index: 10;
+    overflow-y: auto;
+    padding: 20px 18px 30px;
+  }
+  .rm-panel.open { transform: translateX(0); }
+
+  .rm-panel-close {
+    position: absolute;
+    top: 12px; right: 14px;
+    background: none;
+    border: none;
+    color: var(--brass-light);
+    font-family: 'Comic Relief', sans-serif;
+    font-size: 18px;
+    cursor: pointer;
+  }
+
+  .rm-panel-card {
+    background: var(--parchment);
+    border: 1px solid var(--parchment-edge);
+    border-radius: 3px;
+    padding: 18px 18px 20px;
+    margin-top: 18px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.35);
+  }
+  .rm-panel-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 1.5px solid var(--ink-soft);
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+  }
+  .rm-panel-callnum {
+    font-family: 'Comic Relief', sans-serif;
+    font-size: 11px;
+    color: var(--claret);
+    font-weight: 600;
+  }
+  .rm-panel-stamp {
+    font-family: 'Comic Relief', sans-serif;
+    font-size: 9px;
+    color: var(--stamp);
+    border: 1.5px solid var(--stamp);
+    padding: 2px 6px;
+    border-radius: 3px;
+    transform: rotate(4deg);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+  .rm-panel-entry {
+    font-family: 'Comic Relief', sans-serif;
+    font-weight: 600;
+    font-size: 22px;
+    margin: 0 0 12px;
+    line-height: 1.15;
+  }
+  .rm-panel-facts { list-style: none; padding: 0; margin: 0 0 16px; }
+  .rm-panel-facts li {
+    font-size: 13.5px;
+    line-height: 1.55;
+    margin-bottom: 8px;
+    padding-left: 15px;
+    position: relative;
+    color: var(--ink-soft);
+  }
+  .rm-panel-facts li::before { content: "—"; position: absolute; left: 0; color: var(--claret); }
+
+  .rm-panel-label {
+    font-family: 'Comic Relief', sans-serif;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--claret);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .rm-chip-list { display: flex; flex-direction: column; gap: 6px; }
+  .rm-chip {
+    text-align: left;
+    background: transparent;
+    border: 1px dashed #9a8b6a;
+    border-radius: 3px;
+    padding: 8px 10px;
+    cursor: pointer;
+    font-family: 'Comic Relief', sans-serif;
+    color: var(--ink);
+    font-size: 12.5px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .rm-chip:hover { background: rgba(107,39,55,0.08); border-color: var(--claret); }
+
+  .rm-panel-loading {
+    font-family: 'Comic Relief', sans-serif;
+    font-size: 12px;
+    color: #c9d3cb;
+    text-align: center;
+    padding: 30px 10px;
+  }
+  .rm-panel-error {
+    font-family: 'Comic Relief', sans-serif;
+    font-size: 11.5px;
+    color: #f2d5cf;
+    background: rgba(156,59,44,0.25);
+    border: 1px solid var(--stamp);
+    border-radius: 3px;
+    padding: 12px 14px;
+    margin-top: 18px;
+    line-height: 1.5;
+  }
+  .rm-retry-btn {
+    margin-top: 10px;
+    background: var(--claret);
+    color: #f4e8d8;
+    border: none;
+    font-family: 'Comic Relief', sans-serif;
+    font-size: 11px;
+    padding: 8px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div class="rm-root" id="rmRoot">
+  <div class="rm-header">
+    <h1>rabbithole-inator</h1>
+  </div>
+  
+  <div class="rm-race-hud" id="rmRaceHud">
+    <span>Target: <b id="rmRaceHudTarget">...</b></span>
+    <span>Clicks: <b id="rmRaceHudSteps">0</b></span>
+    <button class="rm-race-hud-btn" id="rmRaceHudCancel">Give Up</button>
+  </div>
+
+  <div class="rm-viewport" id="rmViewport">
+    <div class="rm-canvas" id="rmCanvas">
+      <svg class="rm-edges" id="rmEdges" xmlns="http://www.w3.org/2000/svg"></svg>
+      <div id="rmNodes"></div>
+    </div>
+  </div>
+
+  <div class="rm-legend"><b>Drag</b> to pan · <b>Scroll / pinch</b> to zoom · <b>Click</b> a card to open it</div>
+
+  <div class="rm-controls">
+    <button class="rm-ctrl-btn" id="rmZoomIn">+</button>
+    <button class="rm-ctrl-btn" id="rmZoomOut">−</button>
+    <button class="rm-ctrl-btn wide" id="rmFit">fit</button>
+    <button class="rm-ctrl-btn wide" id="rmRaceOpen" title="Start a manual Wikirace game">🏁 play game</button>
+  </div>
+
+  <div class="rm-panel" id="rmPanel">
+    <button class="rm-panel-close" id="rmPanelClose">✕</button>
+    <div id="rmPanelBody"></div>
+  </div>
+
+  <div class="rm-keygate hidden" id="rmRaceGate">
+    <div class="rm-keygate-card">
+      <div class="rm-keygate-title">Wikirace</div>
+      <p class="rm-keygate-note">Enter a starting article and a target article. You must click through the blue Wikipedia links on the map to find your way to the target in as few clicks as possible!</p>
+      <input class="rm-key-input" type="text" id="rmRaceStart" placeholder="Start article (e.g. Chess)" autocomplete="off">
+      <input class="rm-key-input" type="text" id="rmRaceEnd" placeholder="Target article (e.g. Carl Sagan)" style="margin-top:-4px;">
+      <button class="rm-key-save" id="rmRaceGo">Start Race</button>
+      <div class="rm-keygate-error" id="rmRaceStatus" style="color:var(--ink-soft);"></div>
+      <button class="rm-key-save" id="rmRaceClose" style="background:var(--walnut); margin-top:10px;">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const SEEDS = [
+    { label: 'British Television & the BBC', query: 'BBC' },
+    { label: 'Pride and Prejudice (1995 TV series)', query: 'Pride and Prejudice 1995 TV series' },
+    { label: 'Jennifer Ehle — Elizabeth Bennet, 1995', query: 'Jennifer Ehle' },
+    { label: 'Television in the United Kingdom', query: 'Television in the United Kingdom' },
+    { label: 'Western Classical Music', query: 'Classical music' },
+    { label: 'Violinists & the Violin', query: 'Violin' },
+    { label: 'Arthouse & Independent Cinema', query: 'Art film' },
+    { label: 'Chess', query: 'Chess' },
+    { label: 'Death Parade (anime)', query: 'Death Parade anime' },
+    { label: 'French Philosophers — Existentialism', query: 'Existentialism' },
+    { label: 'Metaphysics', query: 'Metaphysics' },
+    { label: 'Cosmology', query: 'Physical cosmology' },
+    { label: 'Carl Sagan', query: 'Carl Sagan' },
+  ];
+
+  const viewport = document.getElementById('rmViewport');
+  const canvas = document.getElementById('rmCanvas');
+  const edgesSvg = document.getElementById('rmEdges');
+  const nodesLayer = document.getElementById('rmNodes');
+  const panel = document.getElementById('rmPanel');
+  const panelBody = document.getElementById('rmPanelBody');
+
+  let nodes = [];      
+  let edges = [];      
+  let nodeIdSeq = 0;
+  let selectedId = null;
+  
+  // Game state
+  let raceActive = false;
+  let raceTargetTitle = '';
+  let raceStepCount = 0;
+
+  // Camera
+  let scale = 0.9, tx = 0, ty = 0;
+  let dragging = false, dragStart = null, camStart = null;
+  let pinchStartDist = null, pinchStartScale = null;
+
+  function norm(label) { return String(label).trim().toLowerCase().replace(/\s+/g, ' '); }
+
+  function findNodeByWikiTitle(title) {
+    const n = norm(title);
+    return nodes.find(x => x.wikiTitle && norm(x.wikiTitle) === n);
+  }
+
+  function addSeeds() {
+    const R = 340;
+    SEEDS.forEach((s, i) => {
+      const angle = (i * (2 * Math.PI / SEEDS.length)) - Math.PI / 2;
+      nodes.push({
+        id: 'n' + (nodeIdSeq++),
+        label: s.label,
+        wikiTitle: null,
+        query: s.query,
+        status: 'seed',
+        x: Math.cos(angle) * R,
+        y: Math.sin(angle) * R,
+        depth: 0,
+        pageId: null,
+        pageUrl: null,
+        touched: null,
+        facts: null,
+        childIds: []
+      });
+    });
+  }
+
+  function angleFromOrigin(n) {
+    return Math.atan2(n.y, n.x);
+  }
+
+  function placeChildren(parent, labels) {
+    const baseAngle = angleFromOrigin(parent);
+    const spread = Math.PI * 0.55; 
+    const count = labels.length;
+    const start = baseAngle - spread / 2;
+    const step = count > 1 ? spread / (count - 1) : 0;
+    const radius = 220 + parent.depth * 14;
+    const created = [];
+    labels.forEach((item, i) => {
+      const existing = findNodeByWikiTitle(item.topic);
+      if (existing && existing.id !== parent.id) {
+        if (!edges.some(e => (e.from === parent.id && e.to === existing.id) || (e.from === existing.id && e.to === parent.id))) {
+          edges.push({ from: parent.id, to: existing.id });
+        }
+        parent.childIds.push(existing.id);
+        return;
+      }
+      if (existing && existing.id === parent.id) return; 
+      const angle = start + step * i;
+      const nx = parent.x + Math.cos(angle) * radius;
+      const ny = parent.y + Math.sin(angle) * radius;
+      const node = {
+        id: 'n' + (nodeIdSeq++),
+        label: item.topic,
+        wikiTitle: item.topic,
+        query: null,
+        status: 'stub',
+        x: nx, y: ny,
+        depth: parent.depth + 1,
+        pageId: null,
+        pageUrl: null,
+        touched: null,
+        facts: null,
+        childIds: []
+      };
+      nodes.push(node);
+      edges.push({ from: parent.id, to: node.id });
+      parent.childIds.push(node.id);
+      created.push(node);
+    });
+    return created;
+  }
+
+  // ---------- rendering ----------
+  function updateTransform() {
+    canvas.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
+  }
+
+  function render() {
+    updateTransform();
+
+    const svgLines = edges.map(e => {
+      const a = nodes.find(n => n.id === e.from);
+      const b = nodes.find(n => n.id === e.to);
+      if (!a || !b) return '';
+      const ox = 6000, oy = 6000;
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const nxp = -dy, nyp = dx;
+      const len = Math.hypot(nxp, nyp) || 1;
+      const curve = 14;
+      const cx = (a.x + b.x) / 2 + (nxp / len) * curve + ox;
+      const cy = (a.y + b.y) / 2 + (nyp / len) * curve + oy;
+      return `<path d="M ${a.x + ox} ${a.y + oy} Q ${cx} ${cy} ${b.x + ox} ${b.y + oy}" stroke="#c6a15b" stroke-opacity="0.55" stroke-width="1.6" fill="none" />`;
+    }).join('');
+    edgesSvg.innerHTML = svgLines;
+
+    nodesLayer.innerHTML = nodes.map(n => {
+      const cls = ['rm-node'];
+      if (n.status === 'seed') cls.push('seed');
+      if (n.status === 'opened') cls.push('opened');
+      if (n.status === 'loading') cls.push('loading');
+      if (n.id === selectedId) cls.push('selected');
+      let inner = `<div class="callnum">${n.pageId ? 'WP-' + esc(n.pageId) : ''}</div><div class="label">${esc(n.label)}</div>`;
+      if (n.status === 'loading') {
+        inner += `<div class="spinner-line">fetching from Wikipedia…</div>`;
+      }
+      return `<div class="${cls.join(' ')}" data-id="${n.id}" style="left:${n.x + 6000}px; top:${n.y + 6000}px;">${inner}</div>`;
+    }).join('');
+
+    nodesLayer.querySelectorAll('.rm-node').forEach(el => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        onNodeClick(el.dataset.id);
+      });
+    });
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ---------- Wikipedia API ----------
+  const WIKI_ENDPOINT = 'https://en.wikipedia.org/w/api.php';
+
+  async function wikiGet(params) {
+    const qs = new URLSearchParams(Object.assign({ format: 'json', origin: '*' }, params));
+    const res = await fetch(`${WIKI_ENDPOINT}?${qs.toString()}`);
+    if (!res.ok) throw new Error(`Wikipedia returned status ${res.status}`);
+    return res.json();
+  }
+
+  async function resolveTitle(query) {
+    const data = await wikiGet({ action: 'query', list: 'search', srsearch: query, srlimit: 1, srnamespace: 0 });
+    const hit = data.query && data.query.search && data.query.search[0];
+    return hit ? hit.title : null;
+  }
+
+  async function getPageData(title) {
+    const data = await wikiGet({
+      action: 'query',
+      prop: 'extracts|links|info',
+      exintro: 1,
+      explaintext: 1,
+      exsectionformat: 'plain',
+      pllimit: 500,
+      plnamespace: 0,
+      inprop: 'url',
+      redirects: 1,
+      titles: title
+    });
+    const pages = data.query && data.query.pages;
+    if (!pages) return null;
+    const page = Object.values(pages)[0];
+    if (!page || page.missing !== undefined || !page.pageid) return null;
+    return page;
+  }
+
+  async function getRelated(title) {
+    const data = await wikiGet({ action: 'query', list: 'search', srsearch: `morelike:${title}`, srlimit: 10, srnamespace: 0 });
+    const hits = (data.query && data.query.search) || [];
+    return hits.map(h => h.title).filter(t => norm(t) !== norm(title));
+  }
+
+  function splitFacts(extract) {
+    if (!extract) return ['No summary available for this article.'];
+    const clean = extract.replace(/\s+/g, ' ').trim();
+    const sentences = clean.match(/[^.!?]+[.!?]+(?=\s|$)/g) || [clean];
+    const facts = [];
+    for (const s of sentences) {
+      const t = s.trim();
+      if (t.length > 20) facts.push(t);
+      if (facts.length >= 4) break;
+    }
+    return facts.length ? facts : [clean.slice(0, 240)];
+  }
+
+  function formatTouched(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  async function fetchWikiCard(node) {
+    let title = node.wikiTitle;
+    if (!title) {
+      title = await resolveTitle(node.query || node.label);
+      if (!title) throw new Error('No matching Wikipedia article was found.');
+    }
+    const page = await getPageData(title);
+    if (!page) throw new Error('That article could not be loaded.');
+    const canonicalTitle = page.title;
+    const linkTitles = (page.links || []).map(l => l.title);
+    const related = await getRelated(canonicalTitle);
+
+    const linkSet = new Set(linkTitles.map(norm));
+    let candidates = related.filter(r => linkSet.has(norm(r)));
+    if (candidates.length < 3) {
+      for (const r of related) {
+        if (!candidates.includes(r)) candidates.push(r);
+        if (candidates.length >= 6) break;
+      }
+    }
+    candidates = candidates.filter(c => norm(c) !== norm(canonicalTitle)).slice(0, 3);
+
+    return {
+      wikiTitle: canonicalTitle,
+      pageId: page.pageid,
+      pageUrl: page.fullurl,
+      touched: page.touched,
+      facts: splitFacts(page.extract),
+      seeAlso: candidates
+    };
+  }
+
+  async function openNode(id) {
+    const node = nodes.find(n => n.id === id);
+    if (!node || node.status === 'opened' || node.status === 'loading') return;
+    node.status = 'loading';
+    render();
+    renderPanelLoading(node.label);
+
+    try {
+      const result = await fetchWikiCard(node);
+      node.wikiTitle = result.wikiTitle;
+      node.pageId = result.pageId;
+      node.pageUrl = result.pageUrl;
+      node.touched = result.touched;
+      node.facts = result.facts;
+      node.status = 'opened';
+      placeChildren(node, result.seeAlso.map(topic => ({ topic })));
+      render();
+      selectNode(node.id);
+      centerOn(node, false);
+      
+      // Check for win condition
+      if (raceActive && norm(result.wikiTitle) === norm(raceTargetTitle)) {
+        setTimeout(() => {
+          alert(`Congratulations! You reached ${result.wikiTitle} in ${raceStepCount} clicks!`);
+          endRaceGame();
+        }, 300);
+      }
+      
+    } catch (err) {
+      console.error(err);
+      node.status = 'stub';
+      render();
+      renderPanelError(node.label, err.message || 'Something went wrong.', node.id);
+    }
+  }
+
+  function onNodeClick(id) {
+    const node = nodes.find(n => n.id === id);
+    if (!node) return;
+    
+    if (node.status === 'opened') {
+      selectNode(id);
+      centerOn(node, true);
+    } else if (node.status === 'seed' || node.status === 'stub') {
+      if (raceActive && node.status === 'stub') {
+        raceStepCount++;
+        document.getElementById('rmRaceHudSteps').textContent = raceStepCount;
+      }
+      openNode(id);
+    }
+  }
+
+  function selectNode(id) {
+    selectedId = id;
+    const node = nodes.find(n => n.id === id);
+    render();
+    if (node && node.status === 'opened') renderPanelCard(node);
+  }
+
+  // ---------- panel ----------
+  function renderPanelLoading(label) {
+    panel.classList.add('open');
+    panelBody.innerHTML = `<div class="rm-panel-loading">fetching "${esc(label)}" from Wikipedia…</div>`;
+  }
+
+  function renderPanelError(label, msg, id) {
+    panel.classList.add('open');
+    panelBody.innerHTML = `
+      <div class="rm-panel-error">Couldn't load "${esc(label)}". ${esc(msg)}</div>
+      <button class="rm-retry-btn" id="rmPanelRetry">try again</button>
+    `;
+    document.getElementById('rmPanelRetry').addEventListener('click', () => openNode(id));
+  }
+
+  function renderPanelCard(node) {
+    panel.classList.add('open');
+    const edited = formatTouched(node.touched);
+    const childChips = node.childIds.map(cid => {
+      const c = nodes.find(n => n.id === cid);
+      if (!c) return '';
+      return `<button class="rm-chip" data-jump="${c.id}"><span>${esc(c.label)}</span></button>`;
+    }).join('');
+    panelBody.innerHTML = `
+      <div class="rm-panel-card">
+        <div class="rm-panel-top">
+          <div class="rm-panel-callnum">${node.pageId ? 'WP-' + esc(node.pageId) : '—'}</div>
+          <div class="rm-panel-stamp">${edited ? 'edited ' + edited : ''}</div>
+        </div>
+        <h2 class="rm-panel-entry">${esc(node.label)}</h2>
+        <ul class="rm-panel-facts">${(node.facts || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul>
+        ${node.pageUrl ? `<a href="${esc(node.pageUrl)}" target="_blank" rel="noopener" style="font-family:'Comic Relief',sans-serif;font-size:10.5px;color:var(--claret);display:inline-block;margin-bottom:16px;">Read the full article on Wikipedia ↗</a>` : ''}
+        <div class="rm-panel-label">See also →</div>
+        <div class="rm-chip-list">${childChips}</div>
+      </div>
+    `;
+    panelBody.querySelectorAll('[data-jump]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const jid = btn.dataset.jump;
+        onNodeClick(jid);
+      });
+    });
+  }
+
+  document.getElementById('rmPanelClose').addEventListener('click', () => {
+    panel.classList.remove('open');
+    selectedId = null;
+    render();
+  });
+
+  // ---------- camera ----------
+  function viewportSize() {
+    const r = viewport.getBoundingClientRect();
+    return { w: r.width, h: r.height };
+  }
+
+  function centerOn(node, animate) {
+    const { w, h } = viewportSize();
+    const ox = 6000, oy = 6000;
+    const targetTx = w / 2 - (node.x + ox) * scale;
+    const targetTy = h / 2 - (node.y + oy) * scale;
+    if (animate) canvas.classList.add('animated');
+    tx = targetTx; ty = targetTy;
+    render();
+    if (animate) setTimeout(() => canvas.classList.remove('animated'), 600);
+  }
+
+  function fitAll() {
+    if (!nodes.length) return;
+    const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const { w, h } = viewportSize();
+    const padding = 140;
+    const contentW = (maxX - minX) + padding * 2 || 1;
+    const contentH = (maxY - minY) + padding * 2 || 1;
+    const s = Math.min(w / contentW, h / contentH, 1.1);
+    scale = Math.max(0.25, Math.min(s, 1.4));
+    const ox = 6000, oy = 6000;
+    const cx = (minX + maxX) / 2 + ox;
+    const cy = (minY + maxY) / 2 + oy;
+    canvas.classList.add('animated');
+    tx = w / 2 - cx * scale;
+    ty = h / 2 - cy * scale;
+    render();
+    setTimeout(() => canvas.classList.remove('animated'), 600);
+  }
+
+  document.getElementById('rmZoomIn').addEventListener('click', () => zoomBy(1.2));
+  document.getElementById('rmZoomOut').addEventListener('click', () => zoomBy(1 / 1.2));
+  document.getElementById('rmFit').addEventListener('click', fitAll);
+
+  function zoomBy(factor, cx, cy) {
+    const { w, h } = viewportSize();
+    const px = cx !== undefined ? cx : w / 2;
+    const py = cy !== undefined ? cy : h / 2;
+    const worldX = (px - tx) / scale;
+    const worldY = (py - ty) / scale;
+    scale = Math.max(0.2, Math.min(2.4, scale * factor));
+    tx = px - worldX * scale;
+    ty = py - worldY * scale;
+    updateTransform();
+  }
+
+  viewport.addEventListener('wheel', (ev) => {
+    ev.preventDefault();
+    const rect = viewport.getBoundingClientRect();
+    const factor = ev.deltaY < 0 ? 1.08 : 1 / 1.08;
+    zoomBy(factor, ev.clientX - rect.left, ev.clientY - rect.top);
+  }, { passive: false });
+
+  const activePointers = new Map();
+
+  viewport.addEventListener('pointerdown', (ev) => {
+    if (ev.target.closest && ev.target.closest('.rm-node')) return;
+    viewport.setPointerCapture(ev.pointerId);
+    activePointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+    if (activePointers.size === 1) {
+      dragging = true;
+      viewport.classList.add('dragging');
+      dragStart = { x: ev.clientX, y: ev.clientY };
+      camStart = { tx, ty };
+    } else if (activePointers.size === 2) {
+      dragging = false;
+      const pts = Array.from(activePointers.values());
+      pinchStartDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      pinchStartScale = scale;
+    }
+  });
+
+  viewport.addEventListener('pointermove', (ev) => {
+    if (!activePointers.has(ev.pointerId)) return;
+    activePointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+
+    if (activePointers.size === 2 && pinchStartDist) {
+      const pts = Array.from(activePointers.values());
+      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+      const factor = dist / pinchStartDist;
+      const rect = viewport.getBoundingClientRect();
+      const midX = (pts[0].x + pts[1].x) / 2 - rect.left;
+      const midY = (pts[0].y + pts[1].y) / 2 - rect.top;
+      scale = Math.max(0.2, Math.min(2.4, pinchStartScale * factor));
+      const worldX = (midX - camStart.tx) / pinchStartScale;
+      const worldY = (midY - camStart.ty) / pinchStartScale;
+      tx = midX - worldX * scale;
+      ty = midY - worldY * scale;
+      updateTransform();
+      return;
+    }
+
+    if (dragging && activePointers.size === 1) {
+      tx = camStart.tx + (ev.clientX - dragStart.x);
+      ty = camStart.ty + (ev.clientY - dragStart.y);
+      updateTransform();
+    }
+  });
+
+  function endPointer(ev) {
+    activePointers.delete(ev.pointerId);
+    if (activePointers.size === 0) {
+      dragging = false;
+      viewport.classList.remove('dragging');
+      pinchStartDist = null;
+    } else if (activePointers.size === 1) {
+      const pt = Array.from(activePointers.values())[0];
+      dragStart = { x: pt.x, y: pt.y };
+      camStart = { tx, ty };
+      dragging = true;
+    }
+  }
+  viewport.addEventListener('pointerup', endPointer);
+  viewport.addEventListener('pointercancel', endPointer);
+  viewport.addEventListener('pointerleave', (ev) => {
+    if (activePointers.size <= 1) endPointer(ev);
+  });
+
+  // ---------- Playable Wikirace ----------
+  const raceGate = document.getElementById('rmRaceGate');
+  const raceStartInput = document.getElementById('rmRaceStart');
+  const raceEndInput = document.getElementById('rmRaceEnd');
+  const raceStatus = document.getElementById('rmRaceStatus');
+  const raceHud = document.getElementById('rmRaceHud');
+  const raceHudCancel = document.getElementById('rmRaceHudCancel');
+
+  function showRaceGate() {
+    raceGate.classList.remove('hidden');
+    raceStatus.textContent = '';
+  }
+  
+  function hideRaceGate() { 
+    raceGate.classList.add('hidden'); 
+  }
+
+  function endRaceGame() {
+    raceActive = false;
+    raceHud.style.display = 'none';
+    nodes = [];
+    edges = [];
+    panel.classList.remove('open');
+    addSeeds();
+    render();
+    fitAll();
+  }
+
+  document.getElementById('rmRaceOpen').addEventListener('click', showRaceGate);
+  document.getElementById('rmRaceClose').addEventListener('click', hideRaceGate);
+  raceHudCancel.addEventListener('click', endRaceGame);
+
+  document.getElementById('rmRaceGo').addEventListener('click', async () => {
+    const startQ = raceStartInput.value.trim();
+    const endQ = raceEndInput.value.trim();
+    if (!startQ || !endQ) { raceStatus.textContent = 'Enter both a start and a target article.'; return; }
+    
+    raceStatus.style.color = 'var(--ink-soft)';
+    raceStatus.textContent = 'Resolving both articles…';
+    
+    try {
+      const [startTitle, endTitle] = await Promise.all([resolveTitle(startQ), resolveTitle(endQ)]);
+      if (!startTitle) throw new Error(`Couldn't find an article matching "${startQ}".`);
+      if (!endTitle) throw new Error(`Couldn't find an article matching "${endQ}".`);
+      
+      // Setup Game State
+      raceActive = true;
+      raceTargetTitle = endTitle;
+      raceStepCount = 0;
+
+      // Reset Map
+      nodes = [];
+      edges = [];
+      nodeIdSeq = 0;
+      selectedId = null;
+      panel.classList.remove('open');
+
+      // Create start node
+      const startNode = {
+        id: 'n' + (nodeIdSeq++),
+        label: startTitle,
+        wikiTitle: startTitle,
+        query: startTitle,
+        status: 'seed',
+        x: 0,
+        y: 0,
+        depth: 0,
+        pageId: null,
+        pageUrl: null,
+        touched: null,
+        facts: null,
+        childIds: []
+      };
+      nodes.push(startNode);
+
+      // UI updates
+      hideRaceGate();
+      raceHud.style.display = 'flex';
+      document.getElementById('rmRaceHudTarget').textContent = endTitle;
+      document.getElementById('rmRaceHudSteps').textContent = raceStepCount;
+      
+      // Jump into start node
+      render();
+      scale = 1;
+      centerOn(startNode, false);
+      openNode(startNode.id);
+
+    } catch (err) {
+      console.error(err);
+      raceStatus.style.color = 'var(--stamp)';
+      raceStatus.textContent = err.message || 'Something went wrong.';
+    }
+  });
+
+  // ---------- init ----------
+  addSeeds();
+  render();
+  requestAnimationFrame(() => {
+    const { w, h } = viewportSize();
+    const ox = 6000, oy = 6000;
+    tx = w / 2 - ox * scale;
+    ty = h / 2 - oy * scale;
+    render();
+  });
+})();
+</script>
+</body>
+</html>
