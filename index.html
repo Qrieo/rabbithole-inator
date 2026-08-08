@@ -70,7 +70,7 @@
 
   .rm-edges {
     position: absolute;
-    left: -6000px; top: -6000px;
+    left: 0; top: 0;
     width: 12000px; height: 12000px;
     overflow: visible;
     pointer-events: none;
@@ -157,7 +157,6 @@
   }
   .rm-legend b { color: var(--brass-light); }
 
-  /* HUD for active race */
   .rm-race-hud {
     position: absolute;
     top: 16px;
@@ -187,8 +186,11 @@
     padding: 6px 12px;
     font-size: 12px;
   }
+  .rm-race-hud-btn:disabled {
+    background: var(--ink-soft);
+    cursor: not-allowed;
+  }
 
-  /* Modal overlay */
   .rm-keygate {
     position: absolute;
     inset: 0;
@@ -236,6 +238,29 @@
     color: var(--ink);
     margin-bottom: 12px;
   }
+  .rm-key-input:disabled {
+    background: #e2d8c1;
+    color: #8c816f;
+    border-color: #d3c393;
+    font-style: italic;
+  }
+  
+  .rm-mode-selector {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+    font-family: 'Comic Relief', sans-serif;
+    font-size: 13.5px;
+    color: var(--ink);
+    background: rgba(255,255,255,0.3);
+    padding: 12px;
+    border-radius: 4px;
+    border: 1px dashed var(--parchment-edge);
+  }
+  .rm-mode-selector label { cursor: pointer; display: flex; align-items: flex-start; gap: 6px; }
+  .rm-mode-selector span { display: block; font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
+
   .rm-key-save {
     width: 100%;
     background: var(--claret);
@@ -256,7 +281,6 @@
     min-height: 14px;
   }
 
-  /* Detail panel */
   .rm-panel {
     position: absolute;
     top: 0; right: 0;
@@ -403,12 +427,23 @@
   <div class="rm-race-hud" id="rmRaceHud">
     <span>Target: <b id="rmRaceHudTarget">...</b></span>
     <span>Clicks: <b id="rmRaceHudSteps">0</b></span>
+    <span id="rmRaceHudOptimalSpan" style="display:none; color:var(--ink-soft);">| Optimal: <b id="rmRaceHudOptimalValue" style="color:var(--ink);">...</b></span>
     <button class="rm-race-hud-btn" id="rmRaceHudCancel">Give Up</button>
   </div>
 
   <div class="rm-viewport" id="rmViewport">
     <div class="rm-canvas" id="rmCanvas">
-      <svg class="rm-edges" id="rmEdges" xmlns="http://www.w3.org/2000/svg"></svg>
+      <svg class="rm-edges" id="rmEdges" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="rm-arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#c6a15b" opacity="0.8"/>
+          </marker>
+          <marker id="rm-arrow-path" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse" markerUnits="userSpaceOnUse">
+            <path d="M 0 1 L 8 5 L 0 9 z" fill="#9c3b2c" opacity="1"/>
+          </marker>
+        </defs>
+        <g id="rmEdgeLines"></g>
+      </svg>
       <div id="rmNodes"></div>
     </div>
   </div>
@@ -427,15 +462,44 @@
     <div id="rmPanelBody"></div>
   </div>
 
+  <!-- Race Start Modal -->
   <div class="rm-keygate hidden" id="rmRaceGate">
     <div class="rm-keygate-card">
       <div class="rm-keygate-title">Wikirace</div>
-      <p class="rm-keygate-note">Enter a starting article and a target article. You must click through the blue Wikipedia links on the map to find your way to the target in as few clicks as possible!</p>
-      <input class="rm-key-input" type="text" id="rmRaceStart" placeholder="Start article (e.g. Chess)" autocomplete="off">
-      <input class="rm-key-input" type="text" id="rmRaceEnd" placeholder="Target article (e.g. Carl Sagan)" style="margin-top:-4px;">
+      <p class="rm-keygate-note">Click through the blue Wikipedia links on the map to find your way to the target in as few clicks as possible!</p>
+      
+      <div class="rm-mode-selector">
+        <label>
+          <input type="radio" name="raceMode" value="training" checked> 
+          <div>
+            <b>Training Mode (Guided)</b>
+            <span>You choose the articles. The game finds paths and shows the optimal click count.</span>
+          </div>
+        </label>
+        <label>
+          <input type="radio" name="raceMode" value="gameplay">
+          <div>
+            <b>Gameplay Mode (Random)</b>
+            <span>Pure chaos. The game randomly picks a curated puzzle. No hints, just you against the rabbit hole.</span>
+          </div>
+        </label>
+      </div>
+
+      <input class="rm-key-input" type="text" id="rmRaceStart" placeholder="Start article (e.g. Earth)" autocomplete="off">
+      <input class="rm-key-input" type="text" id="rmRaceEnd" placeholder="Target article (e.g. Moon)" style="margin-top:-4px;">
+
       <button class="rm-key-save" id="rmRaceGo">Start Race</button>
       <div class="rm-keygate-error" id="rmRaceStatus" style="color:var(--ink-soft);"></div>
       <button class="rm-key-save" id="rmRaceClose" style="background:var(--walnut); margin-top:10px;">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Custom Victory Modal -->
+  <div class="rm-keygate hidden" id="rmWinGate" style="z-index: 30;">
+    <div class="rm-keygate-card" style="text-align: center; padding-top: 36px;">
+      <div class="rm-keygate-title" style="color: var(--claret); font-size: 28px; font-style: italic;">🎉 You Win! 🎉</div>
+      <p class="rm-keygate-note" id="rmWinMessage" style="font-size: 16px; margin: 16px 0 24px;">You reached the target!</p>
+      <button class="rm-key-save" id="rmWinClose" style="font-size: 14px; padding: 12px;">Awesome!</button>
     </div>
   </div>
 </div>
@@ -456,26 +520,63 @@
     { label: 'Metaphysics', query: 'Metaphysics' },
     { label: 'Cosmology', query: 'Physical cosmology' },
     { label: 'Carl Sagan', query: 'Carl Sagan' },
+    { label: 'Library of Congress Movies', query: 'National Film Registry' },
+    { label: 'Pulitzer Prize Winners', query: 'Pulitzer Prize' },
+    { label: 'Art of the Great Depression', query: 'Public Works of Art Project' },
+    { label: 'The Umbrellas of Cherbourg', query: 'The Umbrellas of Cherbourg' },
+    { label: 'Doctor Who', query: 'Doctor Who' }
+  ];
+
+  const CURATED_RACES = [
+    { start: 'Avocado', target: 'Julius Caesar', path: ['Avocado', 'Mexico', 'Spain', 'Roman Empire', 'Julius Caesar'] },
+    { start: 'Batman', target: 'Thermodynamics', path: ['Batman', 'Science fiction', 'Physics', 'Thermodynamics'] },
+    { start: 'Chess', target: 'Carl Sagan', path: ['Chess', 'Mathematics', 'Astronomy', 'Carl Sagan'] },
+    { start: 'Sushi', target: 'Great Pyramid of Giza', path: ['Sushi', 'Japan', 'World Heritage Site', 'Egypt', 'Great Pyramid of Giza'] },
+    { start: 'Pikachu', target: 'Albert Einstein', path: ['Pikachu', 'Japan', 'United States', 'Albert Einstein'] },
+    { start: 'Harry Potter', target: 'Quantum mechanics', path: ['Harry Potter', 'United Kingdom', 'Science', 'Physics', 'Quantum mechanics'] },
+    { start: 'Pizza', target: 'Black hole', path: ['Pizza', 'Italy', 'Astronomy', 'Black hole'] },
+    { start: 'Superman', target: 'Dinosaur', path: ['Superman', 'United States', 'Paleontology', 'Dinosaur'] },
+    { start: 'SpongeBob SquarePants', target: 'World War II', path: ['SpongeBob SquarePants', 'United States', 'World War II'] },
+    { start: 'Pac-Man', target: 'Leonardo da Vinci', path: ['Pac-Man', 'Japan', 'Italy', 'Leonardo da Vinci'] },
+    { start: 'Banana', target: 'Oxygen', path: ['Banana', 'Photosynthesis', 'Oxygen'] },
+    { start: 'Gladiator (2000 film)', target: 'Philosophy', path: ['Gladiator (2000 film)', 'Marcus Aurelius', 'Stoicism', 'Philosophy'] },
+    { start: 'Lego', target: 'Petroleum', path: ['Lego', 'Plastic', 'Petroleum'] },
+    { start: 'Vampire', target: 'Rabies', path: ['Vampire', 'Bat', 'Rabies'] },
+    { start: 'Pirate', target: 'Rum', path: ['Pirate', 'Caribbean', 'Rum'] },
+    { start: 'Tetris', target: 'Cold War', path: ['Tetris', 'Soviet Union', 'Cold War'] },
+    { start: 'Coffee', target: 'Age of Enlightenment', path: ['Coffee', 'Coffeehouse', 'Age of Enlightenment'] },
+    { start: 'Godzilla', target: 'Nuclear weapon', path: ['Godzilla', 'Nuclear weapon'] },
+    { start: 'Taco', target: 'Genghis Khan', path: ['Taco', 'Mexico', 'Spain', 'Asia', 'Genghis Khan'] },
+    { start: 'Minecraft', target: 'Industrial Revolution', path: ['Minecraft', 'Mining', 'Industrial Revolution'] },
+    { start: 'National Film Registry', target: 'Star Wars', path: ['National Film Registry', 'Science fiction film', 'Star Wars'] },
+    { start: 'The Umbrellas of Cherbourg', target: 'France', path: ['The Umbrellas of Cherbourg', 'Musical film', 'France'] },
+    { start: 'Doctor Who', target: 'Time travel', path: ['Doctor Who', 'Science fiction', 'Time travel'] },
+    { start: 'Public Works of Art Project', target: 'Museum of Modern Art', path: ['Public Works of Art Project', 'New York City', 'Museum of Modern Art'] },
+    { start: 'Pulitzer Prize', target: 'Ernest Hemingway', path: ['Pulitzer Prize', 'Columbia University', 'Literature', 'Ernest Hemingway'] }
   ];
 
   const viewport = document.getElementById('rmViewport');
   const canvas = document.getElementById('rmCanvas');
-  const edgesSvg = document.getElementById('rmEdges');
+  const edgesLinesLayer = document.getElementById('rmEdgeLines');
   const nodesLayer = document.getElementById('rmNodes');
   const panel = document.getElementById('rmPanel');
   const panelBody = document.getElementById('rmPanelBody');
+  
+  const winGate = document.getElementById('rmWinGate');
+  const winMessage = document.getElementById('rmWinMessage');
+  const winClose = document.getElementById('rmWinClose');
 
   let nodes = [];      
   let edges = [];      
   let nodeIdSeq = 0;
   let selectedId = null;
   
-  // Game state
   let raceActive = false;
+  let raceMode = 'training'; 
   let raceTargetTitle = '';
   let raceStepCount = 0;
+  let currentCuratedPath = null; 
 
-  // Camera
   let scale = 0.9, tx = 0, ty = 0;
   let dragging = false, dragStart = null, camStart = null;
   let pinchStartDist = null, pinchStartScale = null;
@@ -488,7 +589,7 @@
   }
 
   function addSeeds() {
-    const R = 340;
+    const R = 600;
     SEEDS.forEach((s, i) => {
       const angle = (i * (2 * Math.PI / SEEDS.length)) - Math.PI / 2;
       nodes.push({
@@ -515,11 +616,13 @@
 
   function placeChildren(parent, labels) {
     const baseAngle = angleFromOrigin(parent);
-    const spread = Math.PI * 0.55; 
+    const spread = Math.PI * 0.8; 
     const count = labels.length;
     const start = baseAngle - spread / 2;
     const step = count > 1 ? spread / (count - 1) : 0;
-    const radius = 220 + parent.depth * 14;
+    
+    const radius = 350 + parent.depth * 25; 
+    
     const created = [];
     labels.forEach((item, i) => {
       const existing = findNodeByWikiTitle(item.topic);
@@ -556,7 +659,6 @@
     return created;
   }
 
-  // ---------- rendering ----------
   function updateTransform() {
     canvas.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`;
   }
@@ -568,16 +670,32 @@
       const a = nodes.find(n => n.id === e.from);
       const b = nodes.find(n => n.id === e.to);
       if (!a || !b) return '';
+      
       const ox = 6000, oy = 6000;
-      const dx = b.x - a.x, dy = b.y - a.y;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      
+      const nodeRadiusPadding = 110; 
+      const shortenRatio = Math.max(0, (dist - nodeRadiusPadding) / dist);
+      
+      const endX = a.x + dx * shortenRatio;
+      const endY = a.y + dy * shortenRatio;
+      
       const nxp = -dy, nyp = dx;
-      const len = Math.hypot(nxp, nyp) || 1;
       const curve = 14;
-      const cx = (a.x + b.x) / 2 + (nxp / len) * curve + ox;
-      const cy = (a.y + b.y) / 2 + (nyp / len) * curve + oy;
-      return `<path d="M ${a.x + ox} ${a.y + oy} Q ${cx} ${cy} ${b.x + ox} ${b.y + oy}" stroke="#c6a15b" stroke-opacity="0.55" stroke-width="1.6" fill="none" />`;
+      const cx = (a.x + b.x) / 2 + (nxp / dist) * curve + ox;
+      const cy = (a.y + b.y) / 2 + (nyp / dist) * curve + oy;
+      
+      const stroke = e.isPath ? '#9c3b2c' : '#c6a15b';
+      const opacity = e.isPath ? '1' : '0.6';
+      const width = e.isPath ? '3' : '2';
+      const marker = e.isPath ? 'url(#rm-arrow-path)' : 'url(#rm-arrow)';
+      
+      return `<path d="M ${a.x + ox} ${a.y + oy} Q ${cx} ${cy} ${endX + ox} ${endY + oy}" stroke="${stroke}" stroke-opacity="${opacity}" stroke-width="${width}" fill="none" marker-end="${marker}" />`;
     }).join('');
-    edgesSvg.innerHTML = svgLines;
+    
+    edgesLinesLayer.innerHTML = svgLines;
 
     nodesLayer.innerHTML = nodes.map(n => {
       const cls = ['rm-node'];
@@ -604,7 +722,6 @@
     return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  // ---------- Wikipedia API ----------
   const WIKI_ENDPOINT = 'https://en.wikipedia.org/w/api.php';
 
   async function wikiGet(params) {
@@ -641,9 +758,42 @@
   }
 
   async function getRelated(title) {
-    const data = await wikiGet({ action: 'query', list: 'search', srsearch: `morelike:${title}`, srlimit: 10, srnamespace: 0 });
+    const data = await wikiGet({ action: 'query', list: 'search', srsearch: `morelike:${title}`, srlimit: 15, srnamespace: 0 });
     const hits = (data.query && data.query.search) || [];
     return hits.map(h => h.title).filter(t => norm(t) !== norm(title));
+  }
+
+  async function fetchWikiList(title, prop, limitParam) {
+    const data = await wikiGet({
+      action: 'query',
+      prop: prop,
+      titles: title,
+      [limitParam]: 500,
+      [`${limitParam.slice(0, 2)}namespace`]: 0
+    });
+    const pages = data.query && data.query.pages;
+    if (!pages) return [];
+    const page = Object.values(pages)[0];
+    return (page[prop] || []).map(x => x.title);
+  }
+
+  async function solveRaceFast(start, target) {
+    const [startLinks, targetLinksHere] = await Promise.all([
+      fetchWikiList(start, 'links', 'pllimit'),
+      fetchWikiList(target, 'linkshere', 'lhlimit')
+    ]);
+    
+    const startSet = new Set(startLinks.map(norm));
+    const targetSet = new Set(targetLinksHere.map(norm));
+    
+    if (startSet.has(norm(target))) return [start, target];
+    
+    for (const link of startLinks) {
+      if (targetSet.has(norm(link))) {
+        return [start, link, target];
+      }
+    }
+    return null;
   }
 
   function splitFacts(extract) {
@@ -678,15 +828,55 @@
     const linkTitles = (page.links || []).map(l => l.title);
     const related = await getRelated(canonicalTitle);
 
-    const linkSet = new Set(linkTitles.map(norm));
-    let candidates = related.filter(r => linkSet.has(norm(r)));
-    if (candidates.length < 3) {
-      for (const r of related) {
-        if (!candidates.includes(r)) candidates.push(r);
-        if (candidates.length >= 6) break;
+    let candidates = [];
+    
+    if (raceActive) {
+      if (raceMode === 'training') {
+          const linkSet = new Set(linkTitles.map(norm));
+          
+          if (linkSet.has(norm(raceTargetTitle))) {
+              candidates.push(raceTargetTitle);
+          } else {
+              try {
+                  const targetInbound = await fetchWikiList(raceTargetTitle, 'linkshere', 'lhlimit');
+                  const targetInboundSet = new Set(targetInbound.map(norm));
+                  
+                  const winningLinks = linkTitles.filter(t => targetInboundSet.has(norm(t)));
+                  for(let wl of winningLinks) {
+                      if(!candidates.includes(wl)) candidates.push(wl);
+                      if(candidates.length >= 2) break;
+                  }
+              } catch(e) {
+                  console.error("Heuristic hint failed", e);
+              }
+          }
+      } else if (raceMode === 'gameplay' && currentCuratedPath) {
+          const pathIndex = currentCuratedPath.findIndex(p => norm(p) === norm(canonicalTitle));
+          if (pathIndex !== -1 && pathIndex < currentCuratedPath.length - 1) {
+              candidates.push(currentCuratedPath[pathIndex + 1]);
+          }
       }
     }
-    candidates = candidates.filter(c => norm(c) !== norm(canonicalTitle)).slice(0, 3);
+
+    const linkSet = new Set(linkTitles.map(norm));
+    let generalCandidates = related.filter(r => linkSet.has(norm(r)));
+    
+    if (generalCandidates.length < 5) {
+      const shuffledLinks = [...linkTitles].sort(() => 0.5 - Math.random());
+      for (const r of shuffledLinks) {
+        if (!generalCandidates.includes(r)) generalCandidates.push(r);
+        if (generalCandidates.length >= 10) break;
+      }
+    }
+    
+    for (let c of generalCandidates) {
+        if (!candidates.find(x => norm(x) === norm(c)) && norm(c) !== norm(canonicalTitle)) {
+            candidates.push(c);
+        }
+        if (candidates.length >= 5) break; 
+    }
+    
+    candidates = candidates.sort(() => 0.5 - Math.random());
 
     return {
       wikiTitle: canonicalTitle,
@@ -718,12 +908,11 @@
       selectNode(node.id);
       centerOn(node, false);
       
-      // Check for win condition
       if (raceActive && norm(result.wikiTitle) === norm(raceTargetTitle)) {
         setTimeout(() => {
-          alert(`Congratulations! You reached ${result.wikiTitle} in ${raceStepCount} clicks!`);
-          endRaceGame();
-        }, 300);
+          winMessage.innerHTML = `You reached <b>${esc(result.wikiTitle)}</b> in <b>${raceStepCount}</b> clicks!`;
+          winGate.classList.remove('hidden');
+        }, 400);
       }
       
     } catch (err) {
@@ -757,7 +946,6 @@
     if (node && node.status === 'opened') renderPanelCard(node);
   }
 
-  // ---------- panel ----------
   function renderPanelLoading(label) {
     panel.classList.add('open');
     panelBody.innerHTML = `<div class="rm-panel-loading">fetching "${esc(label)}" from Wikipedia…</div>`;
@@ -807,7 +995,6 @@
     render();
   });
 
-  // ---------- camera ----------
   function viewportSize() {
     const r = viewport.getBoundingClientRect();
     return { w: r.width, h: r.height };
@@ -933,13 +1120,29 @@
     if (activePointers.size <= 1) endPointer(ev);
   });
 
-  // ---------- Playable Wikirace ----------
   const raceGate = document.getElementById('rmRaceGate');
   const raceStartInput = document.getElementById('rmRaceStart');
   const raceEndInput = document.getElementById('rmRaceEnd');
   const raceStatus = document.getElementById('rmRaceStatus');
   const raceHud = document.getElementById('rmRaceHud');
   const raceHudCancel = document.getElementById('rmRaceHudCancel');
+  
+  const modeRadios = document.querySelectorAll('input[name="raceMode"]');
+  modeRadios.forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      if (e.target.value === 'gameplay') {
+        raceStartInput.disabled = true;
+        raceEndInput.disabled = true;
+        raceStartInput.value = '🎲 Random Start Article';
+        raceEndInput.value = '🎲 Random Target Article';
+      } else {
+        raceStartInput.disabled = false;
+        raceEndInput.disabled = false;
+        raceStartInput.value = '';
+        raceEndInput.value = '';
+      }
+    });
+  });
 
   function showRaceGate() {
     raceGate.classList.remove('hidden');
@@ -959,38 +1162,131 @@
     addSeeds();
     render();
     fitAll();
+    
+    raceHudCancel.dataset.givenUp = "";
+    raceHudCancel.textContent = 'Give Up';
   }
+
+  winClose.addEventListener('click', () => {
+    winGate.classList.add('hidden');
+    endRaceGame();
+  });
+
+  raceHudCancel.addEventListener('click', async () => {
+    if (!raceActive) return;
+    
+    if (raceHudCancel.dataset.givenUp === "true") {
+      endRaceGame();
+      return;
+    }
+    
+    raceHudCancel.textContent = 'Computing path...';
+    raceHudCancel.disabled = true;
+    
+    try {
+      const startNode = nodes.find(n => n.depth === 0);
+      let path;
+      
+      if (raceMode === 'gameplay' && currentCuratedPath) {
+          path = currentCuratedPath;
+      } else {
+          path = await solveRaceFast(startNode.wikiTitle, raceTargetTitle);
+      }
+      
+      if (path) {
+        let parent = startNode;
+        for (let i = 1; i < path.length; i++) {
+          const title = path[i];
+          let existing = findNodeByWikiTitle(title);
+          if (!existing) {
+            existing = {
+              id: 'n' + (nodeIdSeq++),
+              label: title,
+              wikiTitle: title,
+              query: title,
+              status: 'opened',
+              x: parent.x + 280,
+              y: parent.y + (Math.random() * 80 - 40),
+              depth: parent.depth + 1,
+              pageId: null,
+              pageUrl: null,
+              touched: null,
+              facts: ['Part of the solution path.'],
+              childIds: []
+            };
+            nodes.push(existing);
+          }
+          if (!edges.some(e => e.from === parent.id && e.to === existing.id)) {
+            edges.push({ from: parent.id, to: existing.id, isPath: true });
+          } else {
+            const edge = edges.find(e => e.from === parent.id && e.to === existing.id);
+            if (edge) edge.isPath = true;
+          }
+          parent = existing;
+        }
+        
+        render();
+        fitAll();
+        
+        raceHudCancel.textContent = 'Close Race';
+        raceHudCancel.dataset.givenUp = "true";
+        raceHudCancel.disabled = false;
+      } else {
+        alert("The path between these two pages is too deep! Your web browser can easily scan 1-2 clicks away (around 100,000 links), but scanning 3+ clicks away requires checking over 25,000,000 links, which would crash your browser.");
+        endRaceGame();
+      }
+    } catch(e) {
+      console.error(e);
+      raceHudCancel.textContent = 'Error finding path';
+      setTimeout(() => {
+        endRaceGame();
+      }, 2000);
+    }
+  });
 
   document.getElementById('rmRaceOpen').addEventListener('click', showRaceGate);
   document.getElementById('rmRaceClose').addEventListener('click', hideRaceGate);
-  raceHudCancel.addEventListener('click', endRaceGame);
 
   document.getElementById('rmRaceGo').addEventListener('click', async () => {
-    const startQ = raceStartInput.value.trim();
-    const endQ = raceEndInput.value.trim();
-    if (!startQ || !endQ) { raceStatus.textContent = 'Enter both a start and a target article.'; return; }
+    const modeRadio = document.querySelector('input[name="raceMode"]:checked');
+    raceMode = modeRadio ? modeRadio.value : 'training';
     
+    let startTitle, endTitle;
     raceStatus.style.color = 'var(--ink-soft)';
-    raceStatus.textContent = 'Resolving both articles…';
     
     try {
-      const [startTitle, endTitle] = await Promise.all([resolveTitle(startQ), resolveTitle(endQ)]);
-      if (!startTitle) throw new Error(`Couldn't find an article matching "${startQ}".`);
-      if (!endTitle) throw new Error(`Couldn't find an article matching "${endQ}".`);
+      if (raceMode === 'gameplay') {
+        raceStatus.textContent = 'Selecting a curated puzzle...';
+        
+        const randomRace = CURATED_RACES[Math.floor(Math.random() * CURATED_RACES.length)];
+        currentCuratedPath = randomRace.path;
+        startTitle = randomRace.start;
+        endTitle = randomRace.target;
+        
+      } else {
+        const startQ = raceStartInput.value.trim();
+        const endQ = raceEndInput.value.trim();
+        if (!startQ || !endQ) { raceStatus.textContent = 'Enter both a start and a target article.'; return; }
+        
+        raceStatus.textContent = 'Resolving both articles…';
+        const [resolvedStart, resolvedEnd] = await Promise.all([resolveTitle(startQ), resolveTitle(endQ)]);
+        if (!resolvedStart) throw new Error(`Couldn't find an article matching "${startQ}".`);
+        if (!resolvedEnd) throw new Error(`Couldn't find an article matching "${endQ}".`);
+        startTitle = resolvedStart;
+        endTitle = resolvedEnd;
+        currentCuratedPath = null;
+      }
       
-      // Setup Game State
       raceActive = true;
       raceTargetTitle = endTitle;
       raceStepCount = 0;
 
-      // Reset Map
       nodes = [];
       edges = [];
       nodeIdSeq = 0;
       selectedId = null;
       panel.classList.remove('open');
 
-      // Create start node
       const startNode = {
         id: 'n' + (nodeIdSeq++),
         label: startTitle,
@@ -1008,13 +1304,30 @@
       };
       nodes.push(startNode);
 
-      // UI updates
       hideRaceGate();
       raceHud.style.display = 'flex';
       document.getElementById('rmRaceHudTarget').textContent = endTitle;
       document.getElementById('rmRaceHudSteps').textContent = raceStepCount;
       
-      // Jump into start node
+      const optimalSpan = document.getElementById('rmRaceHudOptimalSpan');
+      const optimalText = document.getElementById('rmRaceHudOptimalValue');
+      
+      if (raceMode === 'training') {
+         optimalSpan.style.display = 'inline';
+         optimalText.textContent = 'calculating...';
+         solveRaceFast(startTitle, endTitle).then(path => {
+            if (path) {
+               optimalText.textContent = path.length - 1; 
+            } else {
+               optimalText.textContent = '3+';
+            }
+         }).catch(err => {
+            optimalText.textContent = '?';
+         });
+      } else {
+         optimalSpan.style.display = 'none';
+      }
+      
       render();
       scale = 1;
       centerOn(startNode, false);
@@ -1027,7 +1340,6 @@
     }
   });
 
-  // ---------- init ----------
   addSeeds();
   render();
   requestAnimationFrame(() => {
